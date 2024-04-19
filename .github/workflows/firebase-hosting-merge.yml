@@ -18,7 +18,7 @@ jobs:
           version: 8
           run_install: false
 
-      - run: pnpm install --frozen-lockfile && pnpm build
+      - run: pnpm install && pnpm build
 
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
