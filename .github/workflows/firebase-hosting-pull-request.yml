@@ -14,13 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - run: pnpm ci && pnpm build
-
       - uses: pnpm/action-setup@v3
         name: Install pnpm
         with:
           version: 8
           run_install: false
+
+      - run: pnpm ci && pnpm build
 
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
