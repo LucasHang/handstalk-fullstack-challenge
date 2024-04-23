@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import RobotAction from "../robot-action";
+import RobotAction from "./robot-action";
 
 export default class RunningRobotAction extends RobotAction {
   activateSpecific(): void {

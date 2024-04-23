@@ -1,8 +1,8 @@
-import DanceRobotAction from "./actions/dance";
-import RunningRobotAction from "./actions/running";
-import SittingRobotAction from "./actions/sitting";
-import WalkingRobotAction from "./actions/walking";
-import Robot from "./robot";
+import DanceRobotAction from "./dance";
+import RunningRobotAction from "./running";
+import SittingRobotAction from "./sitting";
+import WalkingRobotAction from "./walking";
+import Robot from "../robot";
 import { RobotActionProps } from "./robot-action";
 
 export default function robotActionFactory(

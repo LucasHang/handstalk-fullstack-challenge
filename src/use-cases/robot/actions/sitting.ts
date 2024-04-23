@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import RobotAction, { RobotActionProps } from "../robot-action";
+import RobotAction, { RobotActionProps } from "./robot-action";
 import Robot from "../robot";
 
 export default class SittingRobotAction extends RobotAction {

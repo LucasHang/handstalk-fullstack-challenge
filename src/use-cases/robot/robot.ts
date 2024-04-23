@@ -1,24 +1,28 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import RobotAction, { RobotActionProps } from "./robot-action";
-import robotActionFactory from "./robot-action-factory";
+import RobotAction, { RobotActionProps } from "./actions/robot-action";
+import robotActionFactory from "./actions/robot-action-factory";
 
 interface RobotProps {
   dimensions: { width: number; height: number };
+  pixelRatio: number;
   availableActions: string[];
   availableExpressions: string[];
 }
 
 export default class Robot {
+  private dimensions: { width: number; height: number };
+  private pixelRatio: number;
+
   public camera: THREE.PerspectiveCamera;
   public scene: THREE.Scene;
-  public renderer: THREE.WebGLRenderer;
+  private _renderer: THREE.WebGLRenderer | null = null;
   private clock: THREE.Clock;
 
   public dirLight: THREE.DirectionalLight;
 
-  public pmremGenerator: THREE.PMREMGenerator;
-  public neutralEnvironment: THREE.Texture;
+  private _pmremGenerator: THREE.PMREMGenerator | null = null;
+  private _neutralEnvironment: THREE.Texture | null = null;
 
   private mixers: THREE.AnimationMixer[] = [];
 
@@ -33,9 +37,12 @@ export default class Robot {
 
   constructor({
     dimensions,
+    pixelRatio,
     availableActions,
     availableExpressions,
   }: RobotProps) {
+    this.dimensions = dimensions;
+    this.pixelRatio = pixelRatio;
     this.availableActions = availableActions;
     this.availableExpressions = availableExpressions;
 
@@ -53,10 +60,6 @@ export default class Robot {
     this.scene.fog = new THREE.Fog(0xe0e0e0, 20, 100);
 
     this.clock = new THREE.Clock();
-
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.setSize(dimensions.width, dimensions.height);
 
     // lights
 
@@ -81,32 +84,86 @@ export default class Robot {
     grid.material.opacity = 0.2;
     grid.material.transparent = true;
     this.scene.add(grid);
+  }
 
-    // environment
+  private get renderer() {
+    if (!this._renderer) {
+      throw setupRenderNoCalledError;
+    }
 
-    this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+    return this._renderer;
+  }
+
+  get pmremGenerator() {
+    if (!this._pmremGenerator) {
+      throw setupRenderNoCalledError;
+    }
+
+    return this._pmremGenerator;
+  }
+
+  private get neutralEnvironment() {
+    if (!this._neutralEnvironment) {
+      throw setupRenderNoCalledError;
+    }
+
+    return this._neutralEnvironment;
+  }
+
+  get state() {
+    return {
+      actions: this.actions,
+      expressions: this.expressions,
+      activeAction: this.activeAction,
+      robotFace: this.robotFace,
+    };
+  }
+
+  public setupRenderer(): {
+    animate: typeof Robot.prototype.animate;
+    resize: typeof Robot.prototype.resize;
+    domElement: HTMLCanvasElement;
+  } {
+    this._renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(this.pixelRatio);
+    this.renderer.setSize(this.dimensions.width, this.dimensions.height);
+
+    this._pmremGenerator = new THREE.PMREMGenerator(this.renderer);
     this.pmremGenerator.compileEquirectangularShader();
 
-    this.neutralEnvironment = this.pmremGenerator.fromScene(
+    this._neutralEnvironment = this.pmremGenerator.fromScene(
       new RoomEnvironment()
     ).texture;
+
+    return {
+      animate: this.animate.bind(this),
+      resize: this.resize.bind(this),
+      domElement: this.renderer.domElement,
+    };
   }
 
-  public resize({ dimensions }: Pick<RobotProps, "dimensions">) {
-    this.camera.aspect = dimensions.width / dimensions.height;
+  private resize(width: number, height: number) {
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
 
-    this.renderer.setSize(dimensions.width, dimensions.height);
+    this.renderer.setSize(width, height);
   }
 
-  public updateMixers() {
+  private render() {
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private animate() {
+    this.updateMixers();
+    this.render();
+
+    requestAnimationFrame(this.animate.bind(this));
+  }
+
+  private updateMixers() {
     const delta = this.clock.getDelta();
 
     this.mixers.forEach((mixer) => mixer.update(delta));
-  }
-
-  public render() {
-    this.renderer.render(this.scene, this.camera);
   }
 
   public setupLoadedRobot(
@@ -164,6 +221,10 @@ export default class Robot {
   }
 
   public fadeToAction(name: string, duration: number) {
+    if (!this.actions[name]) {
+      return;
+    }
+
     const previousAction = this.activeAction;
     this.activeAction = this.actions[name];
 
@@ -198,6 +259,10 @@ export default class Robot {
   }
 
   public changeExpression(name: string) {
+    if (!this.expressions.find((exp) => exp === name)) {
+      return;
+    }
+
     if (!this.robotFace) {
       return;
     }
@@ -208,3 +273,7 @@ export default class Robot {
       );
   }
 }
+
+const setupRenderNoCalledError = new Error(
+  "Renderer not set. `setupRender` must be called first"
+);

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import Robot from "./robot";
+import Robot from "../robot";
 
 export interface RobotActionProps {
   name: string;
