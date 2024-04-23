@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 import "./App.css";
 
@@ -35,10 +36,12 @@ function setupActions(
     }
   }
 
-  const face = model.getObjectByName("Head_4");
-  const expressionsKeys = Object.keys(face?.morphTargetDictionary).filter(
-    (name) => expressions.includes(name)
-  );
+  const face = model.getObjectByName("Head_4") as THREE.Mesh | undefined;
+  const expressionsKeys = face?.morphTargetDictionary
+    ? Object.keys(face.morphTargetDictionary).filter((name) =>
+        expressions.includes(name)
+      )
+    : [];
 
   return { actions, expressions: expressionsKeys, face };
 }
@@ -63,11 +66,12 @@ function init() {
   let expressions: string[] = [];
 
   let activeAction: THREE.AnimationAction | undefined;
-  let face: THREE.Object3D<THREE.Object3DEventMap> | undefined;
+  let face: THREE.Mesh | undefined;
 
   let discoBall: THREE.Group<THREE.Object3DEventMap> | undefined;
   let discoBallAction: THREE.AnimationAction | undefined;
-  let discoBallLight: THREE.SpotLight | undefined;
+  let discoBallEnvironment: THREE.Texture | undefined;
+
   let runningTrack: THREE.Group<THREE.Object3DEventMap> | undefined;
   let ironThrone: THREE.Group<THREE.Object3DEventMap> | undefined;
 
@@ -95,34 +99,37 @@ function init() {
   grid.material.transparent = true;
   scene.add(grid);
 
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(w, h);
+
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  pmremGenerator.compileEquirectangularShader();
+
+  const neutralEnvironment = pmremGenerator.fromScene(
+    new RoomEnvironment()
+  ).texture;
+
   // model
 
-  const loader = new GLTFLoader();
-
-  loader.load(
-    "./RobotExpressive.glb",
-    (gltf) => {
-      scene.add(gltf.scene);
-
-      robotMixer = new THREE.AnimationMixer(gltf.scene);
-
-      const {
-        actions: newActions,
-        expressions: newExpressions,
-        face: newFace,
-      } = setupActions(robotMixer, gltf.scene, gltf.animations);
-
-      actions = newActions;
-      expressions = newExpressions;
-      face = newFace;
-
-      fadeToAction("Walking", 0);
+  new THREE.TextureLoader().load(
+    "party.jpg",
+    (image) => {
+      image.needsUpdate = true;
+      image.repeat.set(2, 2);
+      image.offset.set(0.5, 0.5);
+      const envMap = pmremGenerator.fromEquirectangular(image).texture;
+      envMap.needsUpdate = true;
+      envMap.repeat.set(2, 2);
+      envMap.offset.set(0.5, 0.5);
+      pmremGenerator.dispose();
+      discoBallEnvironment = envMap;
     },
     undefined,
-    (error) => {
-      console.error(error);
-    }
+    console.error
   );
+
+  const loader = new GLTFLoader();
 
   loader.load(
     "./disco_ball_animated.glb",
@@ -130,32 +137,11 @@ function init() {
       gltf.scene.scale.set(0.02, 0.02, 0.02);
       gltf.scene.position.set(5, 4, 1);
 
-      gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.material.color = new THREE.Color(0xffffff);
-          child.material.emissive = new THREE.Color(0x737373);
-          child.material.metalness = 0.5;
-          child.material.roughness = 0;
-          child.material.flatShading = true;
-        }
-      });
-
       discoBall = gltf.scene;
 
       discoBallMixer = new THREE.AnimationMixer(discoBall);
       const clip = gltf.animations[0];
       discoBallAction = discoBallMixer.clipAction(clip);
-
-      discoBallLight = new THREE.SpotLight(
-        THREE.Color.NAMES.green,
-        20,
-        0,
-        Math.PI / 2,
-        1,
-        0
-      );
-      discoBallLight.position.set(-2, 0, -2);
-      discoBallLight.target = discoBall;
     },
     undefined,
     (error) => {
@@ -192,9 +178,30 @@ function init() {
     }
   );
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(w, h);
+  loader.load(
+    "./RobotExpressive.glb",
+    (gltf) => {
+      scene.add(gltf.scene);
+
+      robotMixer = new THREE.AnimationMixer(gltf.scene);
+
+      const {
+        actions: newActions,
+        expressions: newExpressions,
+        face: newFace,
+      } = setupActions(robotMixer, gltf.scene, gltf.animations);
+
+      actions = newActions;
+      expressions = newExpressions;
+      face = newFace;
+
+      fadeToAction("Walking", 0);
+    },
+    undefined,
+    (error) => {
+      console.error(error);
+    }
+  );
 
   // callbacks
 
@@ -236,29 +243,30 @@ function init() {
       .fadeIn(duration)
       .play();
 
+    scene.environment = neutralEnvironment;
+    scene.background = new THREE.Color(0xe0e0e0);
     dirLight.color.set(0xffffff);
     dirLight.intensity = 3;
-    scene.background = new THREE.Color(0xe0e0e0);
     camera.position.set(-5, 3, 10);
     camera.lookAt(0, 2, 0);
 
     if (discoBall) {
       scene.remove(discoBall);
-      if (discoBallLight) scene.remove(discoBallLight);
       discoBallAction?.stop();
     }
     if (runningTrack) scene.remove(runningTrack);
     if (ironThrone) scene.remove(ironThrone);
 
     if (name === "Dance" && discoBall) {
+      if (discoBallEnvironment) {
+        scene.environment = discoBallEnvironment;
+      }
+      scene.background = new THREE.Color(0x000000);
       scene.add(discoBall);
-      scene.background = new THREE.Color(THREE.Color.NAMES.black);
       dirLight.color.set(THREE.Color.NAMES.purple);
       dirLight.intensity = 10;
 
       camera.position.set(-2, 4, 10);
-
-      if (discoBallLight) scene.add(discoBallLight);
 
       discoBallAction?.play();
     }
@@ -287,7 +295,7 @@ function init() {
       return;
     }
 
-    face.morphTargetInfluences = face.morphTargetInfluences.map((_, i) =>
+    face.morphTargetInfluences = face.morphTargetInfluences?.map((_, i) =>
       i === expressions.indexOf(name) ? 1 : 0
     );
   }
