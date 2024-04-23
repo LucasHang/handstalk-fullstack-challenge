@@ -221,7 +221,7 @@ export default class Robot {
   }
 
   public fadeToAction(name: string, duration: number) {
-    if (!this.actions[name]) {
+    if (!this.availableActions.includes(name)) {
       return;
     }
 
@@ -259,7 +259,7 @@ export default class Robot {
   }
 
   public changeExpression(name: string) {
-    if (!this.expressions.find((exp) => exp === name)) {
+    if (!this.availableExpressions.includes(name)) {
       return;
     }
 
